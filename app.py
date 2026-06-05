@@ -9,12 +9,10 @@ from PIL import Image
 # ---------- FILE NAMES ----------
 RESNET_MODEL = "ResNet50_model.keras"
 EFFICIENT_MODEL = "EfficientNet80_model.keras"
-CLASS_FILE = "class_info.json"
 
 # ---------- GOOGLE DRIVE IDS (REPLACE THESE) ----------
 RESNET_ID = "1PUAxOh3Kj_AdKcZ3LUGezlpwZLP1jKTA"
 EFFICIENT_ID = "1ex2AEXqfTiMNT3UOlhzxOAt1HJD7n3fe"
-CLASS_ID = "1n8clrmDTRI4T6ByV2T-JBTuJw-HUkPtq"
 
 # ---------- DOWNLOAD FUNCTION ----------
 def download_file(file_name, file_id):
@@ -25,7 +23,6 @@ def download_file(file_name, file_id):
 # ---------- DOWNLOAD FILES ----------
 download_file(RESNET_MODEL, RESNET_ID)
 download_file(EFFICIENT_MODEL, EFFICIENT_ID)
-download_file(CLASS_FILE, CLASS_ID)
 
 # ---------- LOAD MODELS ----------
 resnet_model = load_model(RESNET_MODEL)
