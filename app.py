@@ -3,7 +3,15 @@ import gdown
 import os
 import json
 import numpy as np
-from tensorflow.keras.models import load_model
+
+@st.cache_resource
+def load_tf():
+    import tensorflow as tf
+    return tf.keras.models
+
+keras = load_tf()
+load_model = keras.load_model
+
 from PIL import Image
 
 # ---------- FILE NAMES ----------
