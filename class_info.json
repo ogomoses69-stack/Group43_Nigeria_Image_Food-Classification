@@ -1,0 +1,23 @@
+{
+  "class_names": [
+    "Abacha and Ugba(african salad)",
+    "Akara and Eko",
+    "Amala and Gbegiri- Ewedu",
+    "Asaro",
+    "Boli(bole)",
+    "Chin Chin",
+    "Egusi Soup",
+    "Ewa-Agoyin",
+    "Fried Plantains (dodo)",
+    "Jollof Rice",
+    "Meat-pie",
+    "Moin-Moin",
+    "Nkwobi",
+    "Okro Soup",
+    "Pepper Soup",
+    "Puff-Puff",
+    "Suya",
+    "Vegetable Soup"
+  ],
+  "num_classes": 18
+}
