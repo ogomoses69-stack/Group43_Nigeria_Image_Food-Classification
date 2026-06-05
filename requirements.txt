@@ -1,5 +1,5 @@
 streamlit
-tensorflow==3.14.5
+tensorflow==2.15.0
 pillow
 plotly
 gdown
