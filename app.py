@@ -1,4 +1,66 @@
 import streamlit as st
+import gdown
+import os
+import json
+import numpy as np
+from tensorflow.keras.models import load_model
+from PIL import Image
+
+# ---------- FILE NAMES ----------
+RESNET_MODEL = "ResNet50_model.keras"
+EFFICIENT_MODEL = "EfficientNet80_model.keras"
+CLASS_FILE = "class_info.json"
+
+# ---------- GOOGLE DRIVE IDS (REPLACE THESE) ----------
+RESNET_ID = "1PUAxOh3Kj_AdKcZ3LUGezlpwZLP1jKTA"
+EFFICIENT_ID = "1ex2AEXqfTiMNT3UOlhzxOAt1HJD7n3fe"
+CLASS_ID = "1n8clrmDTRI4T6ByV2T-JBTuJw-HUkPtq"
+
+# ---------- DOWNLOAD FUNCTION ----------
+def download_file(file_name, file_id):
+    if not os.path.exists(file_name):
+        url = f"https://drive.google.com/uc?id={file_id}"
+        gdown.download(url, file_name, quiet=False)
+
+# ---------- DOWNLOAD FILES ----------
+download_file(RESNET_MODEL, RESNET_ID)
+download_file(EFFICIENT_MODEL, EFFICIENT_ID)
+download_file(CLASS_FILE, CLASS_ID)
+
+# ---------- LOAD MODELS ----------
+resnet_model = load_model(RESNET_MODEL)
+efficient_model = load_model(EFFICIENT_MODEL)
+
+# ---------- LOAD CLASS LABELS ----------
+with open(CLASS_FILE, "r") as f:
+    class_info = json.load(f)
+
+# ---------- STREAMLIT UI ----------
+st.title("AI Image Classifier")
+
+model_choice = st.selectbox("Choose Model", ["ResNet50", "EfficientNet80"])
+
+uploaded_file = st.file_uploader("Upload an image", type=["jpg", "png", "jpeg"])
+
+# ---------- PREDICTION ----------
+if uploaded_file is not None:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image")
+
+    img = image.resize((224, 224))  # adjust if your model needs different size
+    img_array = np.array(img) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
+
+    model = resnet_model if model_choice == "ResNet50" else efficient_model
+
+    prediction = model.predict(img_array)
+    pred_class = np.argmax(prediction)
+
+    label = class_info[str(pred_class)]
+
+    st.success(f"Prediction: {label}")
+
+import streamlit as st
 import tensorflow as tf
 import numpy as np
 import json
