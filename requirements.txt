@@ -1,6 +1,6 @@
 streamlit
-tensorflow==2.17.1
-pillow
-plotly
 gdown
+Pillow
 numpy
+plotly
+tflite-runtime
