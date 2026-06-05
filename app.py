@@ -25,11 +25,13 @@ tf = _import_tf()
 IMG_SIZE  = (224, 224)
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 
-# Google Drive file IDs  ← REPLACE with your actual IDs
+# class_info.json is committed to the repo — no download needed
+CLASS_INFO_PATH = os.path.join(os.path.dirname(__file__), "class_info.json")
+
+# Google Drive file IDs — only the large model files live here
 DRIVE_FILES = {
     "EfficientNetB0_model.keras": "1ex2AEXqfTiMNT3UOlhzxOAt1HJD7n3fe",
     "ResNet50_model.keras":       "1PUAxOh3Kj_AdKcZ3LUGezlpwZLP1jKTA",
-    "class_info.json":            "1n8clrmDTRI4T6ByV2T-JBTuJw-HUkPtq",   # ← add this
 }
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
@@ -114,9 +116,9 @@ def download_all_files() -> str:
 
 # ── Class-name loader ─────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Reading class labels…")
-def load_class_names(model_dir: str) -> list:
-    path = os.path.join(model_dir, "class_info.json")
-    with open(path) as f:
+def load_class_names(_unused: str = "") -> list:
+    # Reads class_info.json committed in the repo root (next to app.py)
+    with open(CLASS_INFO_PATH) as f:
         data = json.load(f)
     if isinstance(data, dict) and "class_names" in data:
         return data["class_names"]
@@ -157,7 +159,7 @@ st.markdown(
 
 try:
     model_dir   = download_all_files()
-    class_names = load_class_names(model_dir)
+    class_names = load_class_names()
     available   = discover_models(model_dir)
     if not available:
         raise FileNotFoundError("No .keras model files found after download.")
