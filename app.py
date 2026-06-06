@@ -45,11 +45,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
     border: 1px solid #3a3420; border-radius: 20px;
     padding: 0.25rem 0.85rem; font-size: 0.8rem; color: #8a8070; margin-bottom: 1.5rem;
 }
-.stButton > button {
-    background: #f5c842 !important; color: #0f0e0a !important;
-    border: none !important; border-radius: 8px !important;
-    font-weight: 500 !important; padding: 0.5rem 1.5rem !important;
-}
 [data-testid="stFileUploader"] {
     background: #1c1a13; border: 1px dashed #3a3420; border-radius: 12px; padding: 0.5rem;
 }
@@ -60,8 +55,6 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 IMG_SIZE  = (224, 224)
 BASE_DIR  = os.path.dirname(__file__)
 MODEL_DIR = os.path.join(BASE_DIR, "models")
-
-# Google Drive ZIP file ID
 GDRIVE_FILE_ID = "1sPlNu1DEi6BMBgEJr195CsqcR5_722Fh"
 
 # ── Download model from Google Drive ─────────────────────────────────────────
@@ -70,7 +63,7 @@ def download_models():
     import gdown, zipfile
     os.makedirs(MODEL_DIR, exist_ok=True)
     if os.path.exists(os.path.join(MODEL_DIR, "class_info.json")):
-        return  # already downloaded
+        return
     url      = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
     zip_path = os.path.join(BASE_DIR, "models.zip")
     gdown.download(url, zip_path, quiet=False)
@@ -78,21 +71,32 @@ def download_models():
         z.extractall(MODEL_DIR)
     os.remove(zip_path)
 
-# ── Load TensorFlow lazily ────────────────────────────────────────────────────
+# ── Load class names ──────────────────────────────────────────────────────────
+@st.cache_resource(show_spinner="Reading class labels…")
+def load_class_names():
+    path = os.path.join(BASE_DIR, "class_info.json")
+    with open(path) as f:
+        data = json.load(f)
+    if isinstance(data, dict) and "class_names" in data:
+        return data["class_names"]
+    return data
+
+# ── Load a specific model ─────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model…")
-def load_model_and_classes():
+def load_model(fname: str):
     import tensorflow as tf
-    download_models()
-    with open(os.path.join(MODEL_DIR, "class_info.json")) as f:
-        class_info = json.load(f)
-    class_names = class_info["class_names"]
-    for fname in ("EfficientNetB0_model.keras", "ResNet50_model.keras"):
-        path = os.path.join(MODEL_DIR, fname)
-        if os.path.exists(path):
-            model     = tf.keras.models.load_model(path, compile=False)
-            arch_name = fname.replace("_model.keras", "")
-            return model, class_names, arch_name
-    raise FileNotFoundError("No .keras model found in models/ folder.")
+    path = os.path.join(MODEL_DIR, fname)
+    return tf.keras.models.load_model(path, compile=False)
+
+# ── Discover available models ─────────────────────────────────────────────────
+def discover_models():
+    preferred = [
+        "EfficientNetB0_model.keras",
+        "EfficientNetB0_checkpoint.keras",
+        "ResNet50_model.keras",
+        "ResNet50_checkpoint.keras",
+    ]
+    return [f for f in preferred if os.path.exists(os.path.join(MODEL_DIR, f))]
 
 # ── Preprocessing ─────────────────────────────────────────────────────────────
 def preprocess(image: Image.Image) -> np.ndarray:
@@ -106,20 +110,40 @@ st.markdown('<div class="hero-sub">Upload a photo — get instant Nigerian dish 
 
 # ── Boot ──────────────────────────────────────────────────────────────────────
 try:
-    model, class_names, arch_name = load_model_and_classes()
+    download_models()
+    class_names    = load_class_names()
+    available      = discover_models()
+    if not available:
+        raise FileNotFoundError("No model files found after download.")
     boot_ok = True
 except Exception as e:
     boot_ok    = False
     boot_error = str(e)
 
 if not boot_ok:
-    st.error(f"⚠️ Could not load model: {boot_error}")
+    st.error(f"⚠️ Could not load: {boot_error}")
     st.stop()
 
-st.markdown(f'<div class="model-badge">Model: {arch_name} &nbsp;·&nbsp; {len(class_names)} classes</div>', unsafe_allow_html=True)
+# ── Model selector ────────────────────────────────────────────────────────────
+st.markdown("### 🤖 Choose a Model")
+chosen_fname = st.radio(
+    "Select the model to use for prediction:",
+    available,
+    format_func=lambda x: x.replace("_model.keras", " (Main)")
+                           .replace("_checkpoint.keras", " (Checkpoint)"),
+)
+
+model     = load_model(chosen_fname)
+arch_name = chosen_fname.replace("_model.keras", "").replace("_checkpoint.keras", " Checkpoint")
+
+st.markdown(
+    f'<div class="model-badge">Model: {arch_name} &nbsp;·&nbsp; {len(class_names)} classes</div>',
+    unsafe_allow_html=True,
+)
 st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # ── Upload ────────────────────────────────────────────────────────────────────
+st.markdown("### 📸 Upload a Food Image")
 uploaded = st.file_uploader(
     "Drop an image here",
     type=["jpg", "jpeg", "png", "webp"],
