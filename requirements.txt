@@ -1,6 +1,5 @@
-streamlit
-gdown
-Pillow
-numpy
+tensorflow-cpu
+pillow
 plotly
-tflite-runtime
+gdown
+numpy
