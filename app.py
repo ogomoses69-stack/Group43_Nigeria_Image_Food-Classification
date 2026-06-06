@@ -74,7 +74,8 @@ def download_models():
 # ── Load class names ──────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Reading class labels…")
 def load_class_names():
-    path = os.path.join(BASE_DIR, "class_info.json")
+    # class_info.json lives inside the models folder after download
+    path = os.path.join(MODEL_DIR, "class_info.json")
     with open(path) as f:
         data = json.load(f)
     if isinstance(data, dict) and "class_names" in data:
@@ -88,21 +89,27 @@ def load_model(fname: str):
     path = os.path.join(MODEL_DIR, fname)
     return tf.keras.models.load_model(path, compile=False)
 
-# ── Discover available models ─────────────────────────────────────────────────
+# ── Discover available models (ResNet50 only) ─────────────────────────────────
 def discover_models():
     preferred = [
-        "EfficientNetB0_model.keras",
-        "EfficientNetB0_checkpoint.keras",
         "ResNet50_model.keras",
         "ResNet50_checkpoint.keras",
     ]
     return [f for f in preferred if os.path.exists(os.path.join(MODEL_DIR, f))]
 
 # ── Preprocessing ─────────────────────────────────────────────────────────────
-def preprocess(image: Image.Image) -> np.ndarray:
+def preprocess(image: Image.Image, model_fname: str) -> np.ndarray:
+    """
+    Apply the correct preprocessing for each architecture.
+    ResNet50 expects pixel values in [-1, 1] via resnet50.preprocess_input,
+    NOT simple /255 normalisation (which caused wrong predictions).
+    """
+    import tensorflow as tf
     img = image.convert("RGB").resize(IMG_SIZE)
-    arr = np.array(img, dtype=np.float32) / 255.0
-    return np.expand_dims(arr, axis=0)
+    arr = np.array(img, dtype=np.float32)
+    arr = np.expand_dims(arr, axis=0)  # shape: (1, 224, 224, 3)
+    arr = tf.keras.applications.resnet50.preprocess_input(arr)
+    return arr
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="hero-title">🍲 Naija Food<br>Classifier</div>', unsafe_allow_html=True)
@@ -111,10 +118,10 @@ st.markdown('<div class="hero-sub">Upload a photo — get instant Nigerian dish 
 # ── Boot ──────────────────────────────────────────────────────────────────────
 try:
     download_models()
-    class_names    = load_class_names()
-    available      = discover_models()
+    class_names = load_class_names()
+    available   = discover_models()
     if not available:
-        raise FileNotFoundError("No model files found after download.")
+        raise FileNotFoundError("No ResNet50 model files found after download.")
     boot_ok = True
 except Exception as e:
     boot_ok    = False
@@ -161,7 +168,7 @@ if uploaded:
 
     with col2:
         with st.spinner("Analysing…"):
-            preds = model.predict(preprocess(image), verbose=0)[0]
+            preds = model.predict(preprocess(image, chosen_fname), verbose=0)[0]
 
         top_idx   = int(np.argmax(preds))
         top_conf  = float(preds[top_idx]) * 100
