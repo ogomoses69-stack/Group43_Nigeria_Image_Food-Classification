@@ -4,6 +4,7 @@ import numpy as np
 import streamlit as st
 from PIL import Image
 import plotly.graph_objects as go
+import tensorflow as tf
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -54,74 +55,69 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 # ── Constants ─────────────────────────────────────────────────────────────────
 IMG_SIZE  = (224, 224)
 BASE_DIR  = os.path.dirname(__file__)
-MODEL_DIR = os.path.join(BASE_DIR, "models")
-GDRIVE_FILE_ID = "1sPlNu1DEi6BMBgEJr195CsqcR5_722Fh"
 
-# ── Download model from Google Drive ─────────────────────────────────────────
-@st.cache_resource(show_spinner="⏳ Downloading model files (first time only)…")
-def download_models():
-    import gdown, zipfile
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    if os.path.exists(os.path.join(MODEL_DIR, "class_info.json")):
-        return
-    url      = f"https://drive.google.com/uc?id={GDRIVE_FILE_ID}"
-    zip_path = os.path.join(BASE_DIR, "models.zip")
-    gdown.download(url, zip_path, quiet=False)
-    with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(MODEL_DIR)
-    os.remove(zip_path)
+# ResNet50 is downloaded from Google Drive; EfficientNet lives in the repo
+RESNET_FNAME   = "ResNet50_model.keras"
+RESNET_GDRIVE  = "1t-83eEq59GM_USaSjTKDqPwyU4KXWLTH"   # ← your Google Drive file ID
+EFFNET_FNAME   = "EfficientNetB0_model.keras"
+
+# Per-architecture preprocessing functions
+MODEL_CONFIGS = {
+    EFFNET_FNAME:  ("EfficientNet B0",  tf.keras.applications.efficientnet.preprocess_input),
+    RESNET_FNAME:  ("ResNet50",         tf.keras.applications.resnet50.preprocess_input),
+}
+
+# ── Download ResNet50 from Google Drive (once) ────────────────────────────────
+@st.cache_resource(show_spinner="⏳ Downloading ResNet50 (first time only)…")
+def download_resnet():
+    import gdown
+    dest = os.path.join(BASE_DIR, RESNET_FNAME)
+    if os.path.exists(dest):
+        return dest
+    url = f"https://drive.google.com/uc?id={RESNET_GDRIVE}"
+    gdown.download(url, dest, quiet=False)
+    return dest
 
 # ── Load class names ──────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Reading class labels…")
 def load_class_names():
-    # class_info.json lives inside the models folder after download
-    path = os.path.join(MODEL_DIR, "class_info.json")
+    path = os.path.join(BASE_DIR, "class_info.json")
     with open(path) as f:
         data = json.load(f)
-    if isinstance(data, dict) and "class_names" in data:
-        return data["class_names"]
-    return data
+    return data["class_names"] if isinstance(data, dict) and "class_names" in data else data
 
-# ── Load a specific model ─────────────────────────────────────────────────────
+# ── Load a model by filename ──────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading model…")
 def load_model(fname: str):
-    import tensorflow as tf
-    path = os.path.join(MODEL_DIR, fname)
+    path = os.path.join(BASE_DIR, fname)
     return tf.keras.models.load_model(path, compile=False)
 
-# ── Discover available models (ResNet50 only) ─────────────────────────────────
+# ── Discover which models are available ───────────────────────────────────────
 def discover_models():
-    preferred = [
-        "ResNet50_model.keras",
-        "ResNet50_checkpoint.keras",
-    ]
-    return [f for f in preferred if os.path.exists(os.path.join(MODEL_DIR, f))]
+    found = []
+    for fname in MODEL_CONFIGS:
+        if os.path.exists(os.path.join(BASE_DIR, fname)):
+            found.append(fname)
+    return found
 
 # ── Preprocessing ─────────────────────────────────────────────────────────────
-def preprocess(image: Image.Image, model_fname: str) -> np.ndarray:
-    """
-    Apply the correct preprocessing for each architecture.
-    ResNet50 expects pixel values in [-1, 1] via resnet50.preprocess_input,
-    NOT simple /255 normalisation (which caused wrong predictions).
-    """
-    import tensorflow as tf
+def preprocess(image: Image.Image, fname: str) -> np.ndarray:
+    _, preprocess_fn = MODEL_CONFIGS[fname]
     img = image.convert("RGB").resize(IMG_SIZE)
-    arr = np.array(img, dtype=np.float32)
-    arr = np.expand_dims(arr, axis=0)  # shape: (1, 224, 224, 3)
-    arr = tf.keras.applications.resnet50.preprocess_input(arr)
-    return arr
+    arr = np.expand_dims(np.array(img, dtype=np.float32), axis=0)
+    return preprocess_fn(arr)
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="hero-title">🍲 Naija Food<br>Classifier</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-sub">Upload a photo — get instant Nigerian dish recognition</div>', unsafe_allow_html=True)
 
-# ── Boot ──────────────────────────────────────────────────────────────────────
+# ── Boot: download ResNet50, then discover all models ─────────────────────────
 try:
-    download_models()
+    download_resnet()
     class_names = load_class_names()
     available   = discover_models()
     if not available:
-        raise FileNotFoundError("No ResNet50 model files found after download.")
+        raise FileNotFoundError("No model files found.")
     boot_ok = True
 except Exception as e:
     boot_ok    = False
@@ -136,12 +132,11 @@ st.markdown("### 🤖 Choose a Model")
 chosen_fname = st.radio(
     "Select the model to use for prediction:",
     available,
-    format_func=lambda x: x.replace("_model.keras", " (Main)")
-                           .replace("_checkpoint.keras", " (Checkpoint)"),
+    format_func=lambda x: MODEL_CONFIGS[x][0],
 )
 
 model     = load_model(chosen_fname)
-arch_name = chosen_fname.replace("_model.keras", "").replace("_checkpoint.keras", " Checkpoint")
+arch_name = MODEL_CONFIGS[chosen_fname][0]
 
 st.markdown(
     f'<div class="model-badge">Model: {arch_name} &nbsp;·&nbsp; {len(class_names)} classes</div>',
